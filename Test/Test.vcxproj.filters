@@ -69,10 +69,10 @@
     <ClCompile Include="src\KVTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\SPFreshTest.cpp">
+    <ClCompile Include="src\TestDataGenerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\TestDataGenerator.cpp">
+    <ClCompile Include="SPFreshTest1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

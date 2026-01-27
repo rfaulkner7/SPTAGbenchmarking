@@ -462,3 +462,14 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+#Ryan custom ignore
+benchmark.ini
+benchmark_index/
+benchmark_index_saved/
+benchmark_results/
+oldBenchConfigs/
+datasets/siftsmall/
+tempfolder/
+50M_testrunlog01272026.txt
+testrunlog01272026.txt

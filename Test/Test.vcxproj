@@ -150,6 +150,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="SPFreshTest1.cpp" />
     <ClCompile Include="src\AlgoTest.cpp" />
     <ClCompile Include="src\Base64HelperTest.cpp" />
     <ClCompile Include="src\CommonHelperTest.cpp" />
@@ -165,7 +166,6 @@
     <ClCompile Include="src\PerfTest.cpp" />
     <ClCompile Include="src\ReconstructIndexSimilarityTest.cpp" />
     <ClCompile Include="src\SIMDTest.cpp" />
-    <ClCompile Include="src\SPFreshTest.cpp" />
     <ClCompile Include="src\SSDServingTest.cpp" />
     <ClCompile Include="src\StringConvertTest.cpp" />
     <ClCompile Include="src\TestDataGenerator.cpp" />
