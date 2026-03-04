@@ -35,7 +35,8 @@ Helper::LoggerHolder &SPTAG::GetLoggerHolder()
         }
     }
 #endif //  _WINDOWS_
-    static Helper::LoggerHolder s_pLoggerHolder(std::make_shared<Helper::SimpleLogger>(logLevel));
+    // Enable timestamps by default for log correlation with external metrics
+    static Helper::LoggerHolder s_pLoggerHolder(std::make_shared<Helper::SimpleLogger>(logLevel, true));
     return s_pLoggerHolder;
 }
 

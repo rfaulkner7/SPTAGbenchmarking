@@ -11,7 +11,7 @@ using namespace SPTAG::Helper;
 
 XvecVectorReader::XvecVectorReader(std::shared_ptr<ReaderOptions> p_options) : VectorSetReader(p_options)
 {
-    std::string tempFolder("tempfolder");
+    std::string tempFolder("S:\\SPTAG_Temp");
     if (!direxists(tempFolder.c_str()))
     {
         mkdir(tempFolder.c_str());

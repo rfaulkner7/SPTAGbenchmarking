@@ -15,6 +15,9 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$TestCase = "SPFreshTest/BenchmarkFromConfig",
 
+    [Parameter(Mandatory=$false, Position=$null)]
+    [string]$LogFile = $null,
+
     [Parameter(ValueFromRemainingArguments=$true)]
     [string[]]$ExtraArgs = @()
 )
@@ -36,6 +39,9 @@ if ($configFiles.Count -eq 0) {
 Write-Host "Found $($configFiles.Count) benchmark config file(s)" -ForegroundColor Cyan
 Write-Host "Test Executable: $TestExecutable" -ForegroundColor Cyan
 Write-Host "Output Directory: $OutputDir" -ForegroundColor Cyan
+if ($LogFile) {
+    Write-Host "Log File Base: $LogFile" -ForegroundColor Cyan
+}
 Write-Host ""
 
 # Track overall results
@@ -74,12 +80,48 @@ foreach ($configFile in $configFiles) {
 
     Write-Host "Running: $TestExecutable $($argumentList -join ' ')" -ForegroundColor Cyan
 
-    # Run the test
+    # Determine log file path for this benchmark
+    $benchmarkLogFile = ""
+    if ($LogFile) {
+        # If LogFile is specified, use it as base name and append benchmark name
+        $logDir = [System.IO.Path]::GetDirectoryName($LogFile)
+        if ([string]::IsNullOrEmpty($logDir)) { $logDir = "." }
+        $logBaseName = [System.IO.Path]::GetFileNameWithoutExtension($LogFile)
+        $logExt = [System.IO.Path]::GetExtension($LogFile)
+        if ([string]::IsNullOrEmpty($logExt)) { $logExt = ".log" }
+        $benchmarkLogFile = Join-Path $logDir "${logBaseName}_${benchmarkName}_${timestamp}${logExt}"
+    } else {
+        # Default: create log file in output directory
+        $benchmarkLogFile = Join-Path $OutputDir "${benchmarkName}_${timestamp}.log"
+    }
+    
+    Write-Host "Log file: $benchmarkLogFile" -ForegroundColor Cyan
+
+    # Run the test with output redirected to log file (and tee to console)
     $process = Start-Process -FilePath $TestExecutable `
                              -ArgumentList $argumentList `
                              -NoNewWindow `
                              -Wait `
-                             -PassThru
+                             -PassThru `
+                             -RedirectStandardOutput "$benchmarkLogFile.stdout" `
+                             -RedirectStandardError "$benchmarkLogFile.stderr"
+    
+    # Merge stdout and stderr into the main log file
+    if (Test-Path "$benchmarkLogFile.stdout") {
+        Get-Content "$benchmarkLogFile.stdout" | Out-File -FilePath $benchmarkLogFile -Encoding utf8
+        Remove-Item "$benchmarkLogFile.stdout" -ErrorAction SilentlyContinue
+    }
+    if (Test-Path "$benchmarkLogFile.stderr") {
+        Get-Content "$benchmarkLogFile.stderr" | Out-File -FilePath $benchmarkLogFile -Append -Encoding utf8
+        Remove-Item "$benchmarkLogFile.stderr" -ErrorAction SilentlyContinue
+    }
+    
+    # Display last few lines of log to console
+    if (Test-Path $benchmarkLogFile) {
+        Write-Host "--- Last 20 lines of log ---" -ForegroundColor DarkGray
+        Get-Content $benchmarkLogFile -Tail 20 | ForEach-Object { Write-Host $_ -ForegroundColor DarkGray }
+        Write-Host "--- End of log preview ---" -ForegroundColor DarkGray
+    }
     
     # Record end time
     $endTime = Get-Date
@@ -100,6 +142,7 @@ foreach ($configFile in $configFiles) {
         BenchmarkName = $benchmarkName
         ConfigFile = $configFile.Name
         OutputFile = $outputFileName
+        LogFile = [System.IO.Path]::GetFileName($benchmarkLogFile)
         StartTime = $startTime
         EndTime = $endTime
         Duration = $duration

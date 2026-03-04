@@ -35,9 +35,25 @@ DimensionType M = 128;
 int K = 10;
 int queries = 100;
 
+// Build configuration options
+struct BuildConfig {
+    int selectHeadThreads = 16;
+    int buildHeadThreads = 16;
+    int buildSSDThreads = 16;
+    bool parallelBKTBuild = false;
+    int bktKmeansK = 32;
+    int bktLeafSize = 8;
+    float bktLambdaFactor = -1.0f;
+    double ratio = 0.2;
+    int selectThreshold = 0;
+    int splitFactor = 0;
+    int splitThreshold = 0;
+};
+
 template <typename T>
 std::shared_ptr<VectorIndex> BuildIndex(const std::string &outDirectory, std::shared_ptr<VectorSet> vecset,
-                                        std::shared_ptr<MetadataSet> metaset, const std::string &distMethod = "L2")
+                                        std::shared_ptr<MetadataSet> metaset, const std::string &distMethod = "L2",
+                                        const BuildConfig &buildConfig = BuildConfig())
 {
     auto vecIndex = VectorIndex::CreateInstance(IndexAlgoType::SPANN, GetEnumValueType<T>());
 
@@ -54,22 +70,38 @@ std::shared_ptr<VectorIndex> BuildIndex(const std::string &outDirectory, std::sh
 
         [SelectHead]
             isExecute=true
-            NumberOfThreads=16
-            SelectThreshold=0
-            SplitFactor=0
-            SplitThreshold=0
-            Ratio=0.2
+            NumberOfThreads=)" + std::to_string(buildConfig.selectHeadThreads) +
+                                R"(
+            SelectThreshold=)" + std::to_string(buildConfig.selectThreshold) +
+                                R"(
+            SplitFactor=)" + std::to_string(buildConfig.splitFactor) +
+                                R"(
+            SplitThreshold=)" + std::to_string(buildConfig.splitThreshold) +
+                                R"(
+            Ratio=)" + std::to_string(buildConfig.ratio) +
+                                R"(
+            ParallelBKTBuild=)" + (buildConfig.parallelBKTBuild ? "true" : "false") +
+                                R"(
+            BKTKmeansK=)" + std::to_string(buildConfig.bktKmeansK) +
+                                R"(
+            BKTLeafSize=)" + std::to_string(buildConfig.bktLeafSize) +
+                                R"(
+            BKTLambdaFactor=)" + std::to_string(buildConfig.bktLambdaFactor) +
+                                R"(
 
         [BuildHead]
             isExecute=true
-            NumberOfThreads=16
+            ParallelBKTBuild=)" + (buildConfig.parallelBKTBuild ? "true" : "false") + R"(
+            NumberOfThreads=)" + std::to_string(buildConfig.buildHeadThreads) +
+                                R"(
 
         [BuildSSDIndex]
             isExecute=true
             BuildSsdIndex=true
             InternalResultNum=64
             SearchInternalResultNum=64
-            NumberOfThreads=16
+            NumberOfThreads=)" + std::to_string(buildConfig.buildSSDThreads) +
+                                R"(
 	    PostingPageLimit=)" + std::to_string(4 * sizeof(T)) +
                                 R"(
             SearchPostingPageLimit=)" +
@@ -270,9 +302,10 @@ void LoadTestData(const std::string &vectorPath, const std::string &queryPath, c
     // Load dataset using VectorSetReader
     BOOST_TEST_MESSAGE("Loading vectors from: " << vectorPath);
     auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
-    if (ErrorCode::Success != vectorReader->LoadFile(vectorPath))
+    auto error = vectorReader->LoadFile(vectorPath);
+    if (ErrorCode::Success != error)
     {
-        BOOST_FAIL("Failed to load vector file: " << vectorPath);
+        BOOST_FAIL("Failed to load vector file: " << vectorPath << "Error: " << static_cast<uint64_t>(error));        
         return;
     }
     auto allVectors = vectorReader->GetVectorSet();
@@ -393,7 +426,8 @@ template <typename T>
 void RunBenchmark(const std::string &vectorPath, const std::string &queryPath, const std::string &truthPath,
                   const std::string &indexPath, int dimension, int baseVectorCount, int insertVectorCount,
                   int batchSize, int topK, int numThreads, int numQueries,
-                  const std::string &outputFile = "output.json")
+                  const std::string &outputFile = "output.json",
+                  const BuildConfig &buildConfig = BuildConfig())
 {
     M = dimension;
 
@@ -433,7 +467,7 @@ void RunBenchmark(const std::string &vectorPath, const std::string &queryPath, c
     {
         BOOST_TEST_MESSAGE("Index does not exist. Building new index...");
 
-        index = BuildIndex<T>(indexPath, vecset, metaset);
+        index = BuildIndex<T>(indexPath, vecset, metaset, "L2", buildConfig);
         BOOST_REQUIRE(index != nullptr);
 
         BOOST_TEST_MESSAGE("Index built successfully with " << baseVectorCount << " vectors");
@@ -1904,6 +1938,20 @@ BOOST_AUTO_TEST_CASE(BenchmarkFromConfig)
     int numThreads = iniReader.GetParameter("Benchmark", "NumThreads", 32);
     int numQueries = iniReader.GetParameter("Benchmark", "NumQueries", 1000);
 
+    // Parse SelectHead/Build configuration parameters
+    BuildConfig buildConfig;
+    buildConfig.selectHeadThreads = iniReader.GetParameter("SelectHead", "NumberOfThreads", 16);
+    buildConfig.buildHeadThreads = iniReader.GetParameter("BuildHead", "NumberOfThreads", 16);
+    buildConfig.buildSSDThreads = iniReader.GetParameter("BuildSSDIndex", "NumberOfThreads", 16);
+    buildConfig.parallelBKTBuild = iniReader.GetParameter("SelectHead", "ParallelBKTBuild", false);
+    buildConfig.bktKmeansK = iniReader.GetParameter("SelectHead", "BKTKmeansK", 32);
+    buildConfig.bktLeafSize = iniReader.GetParameter("SelectHead", "BKTLeafSize", 8);
+    buildConfig.bktLambdaFactor = iniReader.GetParameter("SelectHead", "BKTLambdaFactor", -1.0f);
+    buildConfig.ratio = iniReader.GetParameter("SelectHead", "Ratio", 0.2);
+    buildConfig.selectThreshold = iniReader.GetParameter("SelectHead", "SelectThreshold", 0);
+    buildConfig.splitFactor = iniReader.GetParameter("SelectHead", "SplitFactor", 0);
+    buildConfig.splitThreshold = iniReader.GetParameter("SelectHead", "SplitThreshold", 0);
+
     BOOST_TEST_MESSAGE("=== Benchmark Configuration ===");
     BOOST_TEST_MESSAGE("Vector Path: " << vectorPath);
     BOOST_TEST_MESSAGE("Query Path: " << queryPath);
@@ -1914,6 +1962,10 @@ BOOST_AUTO_TEST_CASE(BenchmarkFromConfig)
     BOOST_TEST_MESSAGE("Top-K: " << topK);
     BOOST_TEST_MESSAGE("Threads: " << numThreads);
     BOOST_TEST_MESSAGE("Queries: " << numQueries);
+    BOOST_TEST_MESSAGE("Parallel BKT Build: " << (buildConfig.parallelBKTBuild ? "true" : "false"));
+    BOOST_TEST_MESSAGE("SelectHead Threads: " << buildConfig.selectHeadThreads);
+    BOOST_TEST_MESSAGE("BKTKmeansK: " << buildConfig.bktKmeansK);
+    BOOST_TEST_MESSAGE("BKTLeafSize: " << buildConfig.bktLeafSize);
 
     // Get output file path from environment variable or use default
     const char *outputPath = std::getenv("BENCHMARK_OUTPUT");
@@ -1924,17 +1976,17 @@ BOOST_AUTO_TEST_CASE(BenchmarkFromConfig)
     if (valueType == VectorValueType::Float)
     {
         RunBenchmark<float>(vectorPath, queryPath, truthPath, indexPath, dimension, baseVectorCount, insertVectorCount,
-                            batchSize, topK, numThreads, numQueries, outputFile);
+                            batchSize, topK, numThreads, numQueries, outputFile, buildConfig);
     }
     else if (valueType == VectorValueType::Int8)
     {
         RunBenchmark<std::int8_t>(vectorPath, queryPath, truthPath, indexPath, dimension, baseVectorCount,
-                                  insertVectorCount, batchSize, topK, numThreads, numQueries, outputFile);
+                                  insertVectorCount, batchSize, topK, numThreads, numQueries, outputFile, buildConfig);
     }
     else if (valueType == VectorValueType::UInt8)
     {
         RunBenchmark<std::uint8_t>(vectorPath, queryPath, truthPath, indexPath, dimension, baseVectorCount,
-                                   insertVectorCount, batchSize, topK, numThreads, numQueries, outputFile);
+                                   insertVectorCount, batchSize, topK, numThreads, numQueries, outputFile, buildConfig);
     }
 }
 

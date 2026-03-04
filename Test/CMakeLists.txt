@@ -30,4 +30,15 @@ if (NOT LIBRARYONLY)
       RUNTIME DESTINATION bin  
       ARCHIVE DESTINATION lib
       LIBRARY DESTINATION lib)
+
+    # Memory Bandwidth Benchmark (standalone, no Boost/SPTAG dependency)
+    add_executable(MemBWBench ${PROJECT_SOURCE_DIR}/Test/MemoryBandwidthBenchmark.cpp)
+    target_compile_features(MemBWBench PRIVATE cxx_std_17)
+    if(WIN32)
+        target_compile_options(MemBWBench PRIVATE /O2 /arch:AVX2)
+    else()
+        target_compile_options(MemBWBench PRIVATE -O2 -march=native)
+        target_link_libraries(MemBWBench pthread)
+    endif()
+    install(TARGETS MemBWBench RUNTIME DESTINATION bin)
 endif()
